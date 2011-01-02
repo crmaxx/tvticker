@@ -10,9 +10,8 @@ import fcntl   # Для пидов
 import locale  # Для перекодировки
 import time    # Для таймера
 import ConfigParser
+import logging
 #import thread # Для процессов
-
-# TODO: Добавить нормальное логирование через import logging
 
 # Для разбора XML
 from xml.dom.minidom import parseString
@@ -20,6 +19,12 @@ from xml.dom.minidom import parseString
 islock = True
 lock_path = '/home/tvchat/bin/tvchat.lock'
 enc = locale.getpreferredencoding()
+
+LEVELS = {'debug': logging.DEBUG,
+          'info': logging.INFO,
+          'warning': logging.WARNING,
+          'error': logging.ERROR,
+          'critical': logging.CRITICAL}
 
 """Инициализируем модуль для работы с конфигами"""
 config = ConfigParser.ConfigParser()
@@ -36,23 +41,35 @@ cnt = config.get("Default", "cnt")
 data = config.get("Default", "data")
 p = config.get("Default", "p")
 
+"""Инициализируем систему логирования"""
+level_name = config.get("Logs", "level")
+level = LEVELS.get(level_name, logging.NOTSET)
+logging.basicConfig(level = level,
+		    format = config.get("Logs", "format", 1),
+		    filename = config.get("Logs", "filename"),
+		    filemode = 'w')
+
+"""Создаём логгеры"""
+main_logger = logging.getLogger('Main')
+
+main_logger.info("Starting tvchat at %s", data())
+
 ####################################################
 
 def obf(login, password):
     """Функция для обфускации логина и пароля"""
     m = hashlib.md5()
-    m = hashlib.new()
     m.update(login)
     m.update(password)
     return m.hexdigest()
 
 def get_sms(xfile):
     """Получаем xml файл с сайта"""
-    OBF = obf(LGN, PWD)
-    params = urllib.urlencode({'h': OBF, 'c': CNT, 'd': DATA, 'p':P})
+    crpt = obf(user, password)
+    params = urllib.urlencode({'h': crpt, 'c': cnt, 'd': data, 'p': p})
     xml = urllib.urlopen("http://127.0.0.1/pls/apex/cms.txml?%s" % params)
     #link = 'https//127.0.0.1/pls/apex/cms.txml?h='+OBF+'&c='+str(CNT)+'&d='+DATA+'&p='+str(P)
-    #print link
+    #main_logger.debug("Working URI: %s", link)
     #xml = urllib.urlopen(link)
     tmp_file = open(xfile, 'wb')
     tmp_file.write(xml.read())
@@ -87,7 +104,7 @@ def get_new_sms(bgn, end,arr):
 
 def write_sms(files, datas):
     """Записать в каждый каталог по одному файлу с смс"""
-    #print files, datas
+    main_logger.debug("Current files = %s, data = %s", files, data)
     for f, d in map(None, files, datas):
         if d is not None:
             open(f, 'wb').write(d.encode(enc, "replace"))
@@ -131,9 +148,10 @@ def fill_sms():
         tmp = file_cnt
 
         if sms_list_cnt:
-            #print sms_list_cnt, strm, tmp
+            main_logger.debug("Current sms_list_cnt = %s, strm = %s, tmp = %s)", sms_list_cnt, strm, tmp)
             while sms_list_tmp >= 0:
-                #print curr, strm, sms_list_tmp, file_cnt, tmp
+                main_logger.debug("Current curr = %s, strm = %s, sms_list_tmp = %s, file_cnt = %s, tmp = %s)",
+                                  curr, strm, sms_list_tmp, file_cnt, tmp)
                 if (file_cnt > 1) and (strm == 1):
                     """Берём пачку Новых СМС из списка"""
                     new_sms = get_new_sms(curr, tmp, sms_list)
@@ -149,7 +167,7 @@ def fill_sms():
                     curr += tmp
                     tmp += tmp
 
-                #print new_sms, files, file_list
+                main_logger.debug("Current new_sms = %s, files = %s, file_list = %s", new_sms, files, file_list)
         time.sleep(10) # делаем паузу 10 секунд
 
 # В конце скрипта
@@ -169,7 +187,7 @@ def main():
             не сможет работать.
             """
 
-            #print "Повторный запуск процесса"
+            main_logger.debug("Recorded attempt to run the process.")
             sys.exit(2)
 
         _lock_file.write(str(os.getpid()))
