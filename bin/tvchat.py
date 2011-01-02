@@ -4,63 +4,44 @@
 import sys
 import os
 import string
-"""Для md5"""
-import hashlib
-"""Для запроса XML с сайта"""
-import urllib
-"""Для пидов"""
-import fcntl
-"""Для перекодировки"""
-import locale
-"""Для процессов"""
-#import thread
-"""Для таймера"""
-import time
+import hashlib # Для md5
+import urllib  # Для запроса XML с сайта
+import fcntl   # Для пидов
+import locale  # Для перекодировки
+import time    # Для таймера
+import ConfigParser
+#import thread # Для процессов
 
 # TODO: Добавить нормальное логирование через import logging
-# TODO: Добавить нормальный конфиг через import ConfigParser
 
 # Для разбора XML
 from xml.dom.minidom import parseString
 
 islock = True
 lock_path = '/home/tvchat/bin/tvchat.lock'
-enc = locale.getpreferredencoding() 
+enc = locale.getpreferredencoding()
 
-####################################################
-### Переменные для настройки #######################
-####################################################
+"""Инициализируем модуль для работы с конфигами"""
+config = ConfigParser.ConfigParser()
+"""Подгружаем конфиг"""
+config.read('tvchat.cfg')
 
-""" Шаблон сообщений: 
-0 - имя файла, 
-1 - расширение
-"""
-tmpl = ['messages', 'sms']
-"""Потоки/директории"""
-stream = ['/home/tvchat/sms/']
-"""Количество файлов"""
-file_cnt = 3
-"""Логин и пароль от сервиса"""
-LGN = 'admin'
-PWD = 'admin'
-"""Число отгружаемых сообщений"""
-CNT = 30
-""" Дата, 
-начиная с которой выбираются сообщения 
-в формате YYYY-MM-DD"T"HH24:MI:SS
-"""
-DATA = '2009-01-01T00:00:00'
-""" Порядок вывода сообщений:
-0 - выбрать первые "c" сообщений, 
-1 - выбрать последние "с" сообщений).
-"""
-P = 1
+"""Получаем основные переменные"""
+tmpl = config.get("Default", "tmpl")
+stream = config.get("Default", "stream")
+file_count = config.get("Default", "file_count")
+user = config.get("Default", "user")
+password = config.get("Default", "password")
+cnt = config.get("Default", "cnt")
+data = config.get("Default", "data")
+p = config.get("Default", "p")
 
 ####################################################
 
 def obf(login, password):
     """Функция для обфускации логина и пароля"""
     m = hashlib.md5()
+    m = hashlib.new()
     m.update(login)
     m.update(password)
     return m.hexdigest()
@@ -108,13 +89,13 @@ def write_sms(files, datas):
     """Записать в каждый каталог по одному файлу с смс"""
     #print files, datas
     for f, d in map(None, files, datas):
-        if d != None:
+        if d is not None:
             open(f, 'wb').write(d.encode(enc, "replace"))
 
 def make_filename(bgn, end):
     """Сгенерировать очередные имена файлов"""
     result = []
-    # FIXME: !!! Правильную генерацию сделать. Генерит лишние списки !!!
+    # FIXME: Правильную генерацию сделать. Генерит лишние списки.
     for i in xrange(bgn, end):
         u = tmpl[0] + str(i) + "." + tmpl[1]
         u.encode(enc, "replace")
@@ -153,7 +134,6 @@ def fill_sms():
             #print sms_list_cnt, strm, tmp
             while sms_list_tmp >= 0:
                 #print curr, strm, sms_list_tmp, file_cnt, tmp
-                # !
                 if (file_cnt > 1) and (strm == 1):
                     """Берём пачку Новых СМС из списка"""
                     new_sms = get_new_sms(curr, tmp, sms_list)
@@ -165,9 +145,9 @@ def fill_sms():
                     write_sms(file_list, new_sms)
 
                     """Берём новую пачку смс"""
-                    sms_list_tmp = sms_list_tmp - file_cnt
-                    curr = curr + tmp
-                    tmp = tmp + tmp
+                    sms_list_tmp -= file_cnt
+                    curr += tmp
+                    tmp += tmp
 
                 #print new_sms, files, file_list
         time.sleep(10) # делаем паузу 10 секунд
@@ -182,7 +162,7 @@ def main():
             _lock_file=open(lock_path, 'w+')
         try:
             fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except Exception,msg:
+        except Exception, msg:
             """ Если скрипт предусматривает режим ожидание, то сообщение
             пишется на stdout при условии "if isverbose:", иначе
             администартор будет засыпан письмами о повторном запуске и
